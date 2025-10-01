@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Uploadcare Upload</title>
+
+    <!-- Uploadcare Widget -->
+    <script src="https://ucarecdn.com/libs/widget/3.x/uploadcare.full.min.js"></script>
+    <style>
+      .container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      h1 {
+        font-size: 2rem;
+        font-weight: 600;
+        color: #222;
+        margin-bottom: 20px;
+        text-align: center;
+      }
+      .performance-stats {
+        margin-top: 20px;
+        padding: 15px;
+        background: #f5f5f5;
+        border-radius: 8px;
+        font-family: monospace;
+        max-width: 500px;
+      }
+      .stat-row {
+        display: flex;
+        justify-content: space-between;
+        margin: 5px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Uploadcare Upload</h1>
+      <!-- Uploadcare uploader input (Uploadcare renders button UI automatically) -->
+      <input
+        type="hidden"
+        role="uploadcare-uploader"
+        data-public-key="YOUR_PUBLIC_KEY"
+        data-multiple="false"
+      />
+
+      <!-- Performance display -->
+      <div
+        id="performance"
+        class="performance-stats"
+        style="display: none"
+      ></div>
+      <!-- Preview container -->
+      <div id="preview" style="margin-top: 20px"></div>
+    </div>
+
+    <script>
+      // Performance tracking variables
+      let uploadStartTime, fileSize;
+
+      // Initialise Uploadcare widget
+      const widget = uploadcare.Widget("[role=uploadcare-uploader]");
+
+      // widget.onChange() → gives us a file promise-like object
+      widget.onChange((file) => {
+        if (!file) return; // No file selected
+
+        // Track upload start
+        uploadStartTime = performance.now();
+
+        // Track progress (0 → 1)
+        file.progress((info) => {
+          console.log(`Upload progress: ${Math.round(info.progress * 100)}%`);
+        });
+
+        // When upload completes
+        file.done((fileInfo) => {
+          // Calculate upload time
+          const uploadEndTime = performance.now();
+          const uploadDuration = (
+            (uploadEndTime - uploadStartTime) /
+            1000
+          ).toFixed(2);
+
+          // Original CDN URL (permanent link to the file)
+          const originalUrl = fileInfo.cdnUrl;
+          fileSize = fileInfo.size;
+
+          // Test transformation time
+          const transformStartTime = performance.now();
+
+          // Apply transformations using Uploadcare's URL API
+          // Here: resize → quality auto → grayscale
+          const transformedUrl = `${originalUrl}-/resize/400x300/-/quality/smart/-/grayscale/`;
+
+          const testImg = new Image();
+          testImg.onload = function () {
+            const transformDuration = (
+              (performance.now() - transformStartTime) /
+              1000
+            ).toFixed(2);
+
+            // Display performance stats
+            document.getElementById("performance").style.display = "block";
+            document.getElementById("performance").innerHTML = `
+                <h3 style="margin-top: 0;">Performance Metrics</h3>
+                <div class="stat-row">
+                  <span>File Size:</span>
+                  <strong>${(fileSize / 1024 / 1024).toFixed(2)} MB</strong>
+                </div>
+                <div class="stat-row">
+                  <span>Upload Time:</span>
+                  <strong>${uploadDuration}s</strong>
+                </div>
+                <div class="stat-row">
+                  <span>Upload Speed:</span>
+                  <strong>${(fileSize / 1024 / 1024 / uploadDuration).toFixed(
+                    2
+                  )} MB/s</strong>
+                </div>
+                <div class="stat-row">
+                  <span>Transformation Time:</span>
+                  <strong>${transformDuration}s</strong>
+                </div>
+                <div class="stat-row">
+                   <span>Total Time:</span>
+                <strong>${(
+                  parseFloat(uploadDuration) + parseFloat(transformDuration)
+                ).toFixed(2)}s</strong>
+                </div>
+              `;
+          };
+          testImg.src = transformedUrl;
+
+          // Show both original and transformed images in the preview section
+          document.getElementById("preview").innerHTML = `
+            <div style="display: flex; gap: 10px; margin-top:20px; padding:10px;">
+              <p><strong>Original:</strong></p>
+              <img src="${originalUrl}" style="max-width:300px; border-radius:8px;" />
+              <p><strong>Transformed:</strong></p>
+              <img src="${transformedUrl}" style="max-width:300px; border-radius:8px;" />
+            </div>
+          `;
+        });
+
+        // If upload fails
+        file.fail((error) => {
+          console.error("Upload failed:", error);
+        });
+      });
+    </script>
+  </body>
+</html>

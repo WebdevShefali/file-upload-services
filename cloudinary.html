@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Cloudinary Upload</title>
+    <!-- Cloudinary Upload Widget library -->
+    <script
+      src="https://upload-widget.cloudinary.com/global/all.js"
+      type="text/javascript"
+    ></script>
+    <style>
+      .container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      h1 {
+        font-size: 2rem;
+        font-weight: 600;
+        color: #222;
+        margin-bottom: 20px;
+        text-align: center;
+      }
+      #upload-btn {
+        padding: 10px 18px;
+        background-color: blue;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 500;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        transition: background-color 0.2s ease;
+      }
+
+      #upload-btn:hover {
+        background-color: darkblue;
+      }
+
+      .performance-stats {
+        margin-top: 20px;
+        padding: 15px;
+        background: #f5f5f5;
+        border-radius: 8px;
+        font-family: monospace;
+        max-width: 500px;
+      }
+      .stat-row {
+        display: flex;
+        justify-content: space-between;
+        margin: 5px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Cloudinary Upload</h1>
+      <!-- Button to trigger Cloudinary upload widget -->
+      <button id="upload-btn">Upload File</button>
+      <!-- Performance display -->
+      <div
+        id="performance"
+        class="performance-stats"
+        style="display: none"
+      ></div>
+      <!-- Preview area -->
+      <div id="preview"></div>
+    </div>
+
+    <script>
+      // Replace these with your Cloudinary account details
+      const cloudName = "YOUR_CLOUD_NAME";
+      const uploadPreset = "YOUR_PRESET";
+
+      // Performance tracking variables
+      let uploadStartTime, fileSize;
+
+      // Create Cloudinary upload widget instance
+      const widget = cloudinary.createUploadWidget(
+        {
+          cloudName: cloudName,
+          uploadPreset: uploadPreset,
+        },
+        (error, result) => {
+          // Handle upload results
+          if (
+            !error &&
+            result &&
+            result.event === "display-changed" &&
+            result.info === "shown"
+          ) {
+            // Upload widget opened → track start
+            uploadStartTime = performance.now();
+          }
+
+          if (!error && result && result.event === "success") {
+            // Calculate upload time
+            const uploadEndTime = performance.now();
+            const uploadDuration = (
+              (uploadEndTime - uploadStartTime) /
+              1000
+            ).toFixed(2);
+
+            const info = result.info;
+            fileSize = info.bytes; // file size in bytes
+            const uploadSpeed = (
+              fileSize /
+              1024 /
+              1024 /
+              uploadDuration
+            ).toFixed(2);
+
+            console.log("Upload successful:", info);
+
+            const publicId = info.public_id;
+            const originalUrl = info.secure_url;
+
+            // Build transformation URL
+            // Example: resize to 500x500, crop to fill, auto quality & format
+            const transformedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/w_500,h_500,c_fill,q_auto,f_auto/${publicId}.jpg`;
+
+            // Track transformation time
+            const transformStartTime = performance.now();
+            const testImg = new Image();
+            testImg.onload = function () {
+              const transformDuration = (
+                (performance.now() - transformStartTime) /
+                1000
+              ).toFixed(2);
+
+              // Display performance stats
+              document.getElementById("performance").style.display = "block";
+              document.getElementById("performance").innerHTML = `
+                  <h3 style="margin-top: 0;">Performance Metrics</h3>
+                  <div class="stat-row">
+                    <span>File Size:</span>
+                    <strong>${(fileSize / 1024 / 1024).toFixed(2)} MB</strong>
+                  </div>
+                  <div class="stat-row">
+                    <span>Upload Time:</span>
+                    <strong>${uploadDuration}s</strong>
+                  </div>
+                  <div class="stat-row">
+                    <span>Upload Speed:</span>
+                    <strong>${uploadSpeed} MB/s</strong>
+                  </div>
+                  <div class="stat-row">
+                    <span>Transformation Time:</span>
+                    <strong>${transformDuration}s</strong>
+                  </div>
+                  <div class="stat-row">
+                    <span>Total Time:</span>
+                     <strong>${(
+                       parseFloat(uploadDuration) +
+                       parseFloat(transformDuration)
+                     ).toFixed(2)}s</strong>
+                  </div>
+                `;
+            };
+            testImg.src = transformedUrl;
+
+            // Show original and transformed previews
+            document.getElementById("preview").innerHTML = `
+               <div style="display: flex; gap: 10px; margin-top:20px; padding:10px;">
+                <p><strong>Original:</strong></p>
+                <img src="${originalUrl}" style="max-width:200px; border-radius:8px;" />
+                <p><strong>Transformed:</strong></p>
+                <img src="${transformedUrl}" style="max-width:200px; border-radius:8px;" />
+               </div>
+            `;
+          }
+        }
+      );
+
+      // Open widget when button is clicked
+      document.getElementById("upload-btn").addEventListener("click", () => {
+        widget.open();
+      });
+    </script>
+  </body>
+</html>

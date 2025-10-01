@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Transloadit Upload</title>
+    <!-- Transloadit Uppy library -->
+    <link
+      href="https://releases.transloadit.com/uppy/v3.3.1/uppy.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://releases.transloadit.com/uppy/v3.3.1/uppy.min.js"></script>
+    <style>
+      .container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      h1 {
+        font-size: 2rem;
+        font-weight: 600;
+        color: #222;
+        margin-bottom: 20px;
+        text-align: center;
+      }
+      #upload-btn {
+        padding: 10px 18px;
+        background-color: #1e88e5;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 500;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        transition: background-color 0.2s ease;
+      }
+
+      #upload-btn:hover {
+        background-color: #1565c0;
+      }
+
+      #preview {
+        margin-top: 20px;
+        padding: 10px;
+      }
+
+      .preview-container {
+        display: flex;
+        gap: 20px;
+        margin-top: 20px;
+        padding: 10px;
+        flex-wrap: wrap;
+      }
+
+      .preview-item {
+        text-align: center;
+      }
+
+      .preview-item img {
+        max-width: 200px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      .performance-stats {
+        margin-top: 20px;
+        padding: 15px;
+        background: #f5f5f5;
+        border-radius: 8px;
+        font-family: monospace;
+        max-width: 600px;
+      }
+      .stat-row {
+        display: flex;
+        justify-content: space-between;
+        margin: 5px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Transloadit Upload</h1>
+      <!-- Button to trigger upload -->
+      <button id="upload-btn">Upload File</button>
+      <!-- Performance display -->
+      <div
+        id="performance"
+        class="performance-stats"
+        style="display: none"
+      ></div>
+      <!-- Preview area -->
+      <div id="preview"></div>
+    </div>
+
+    <script>
+      // Replace with your Transloadit credentials
+      const authKey = "YOUR_AUTH_KEY";
+
+      // Performance tracking variables
+      let uploadStartTime, fileSize;
+
+      // Create Uppy instance
+      const uppy = new Uppy.Uppy({
+        restrictions: {
+          maxNumberOfFiles: 5,
+          allowedFileTypes: ["image/*", "video/*"],
+        },
+      })
+        .use(Uppy.Dashboard, {
+          inline: false,
+          trigger: "#upload-btn",
+          closeAfterFinish: true,
+          showProgressDetails: true,
+        })
+        .use(Uppy.Transloadit, {
+          service: "https://api2.transloadit.com",
+          params: {
+            auth: { key: authKey },
+
+            // Define steps inline:
+            steps: {
+              ":original": {
+                robot: "/upload/handle",
+              },
+              resize: {
+                use: ":original",
+                robot: "/image/resize",
+                width: 500,
+                height: 500,
+                resize_strategy: "fillcrop",
+                imagemagick_stack: "v3.0.0",
+              },
+              optimize: {
+                use: "resize",
+                robot: "/image/optimize",
+                progressive: true,
+                imagemagick_stack: "v3.0.0",
+              },
+            },
+          },
+          waitForEncoding: true,
+        });
+
+      // Track when upload starts
+      uppy.on("upload-started", (file) => {
+        uploadStartTime = performance.now();
+        fileSize = file.size; // bytes
+      });
+
+      // Track progress
+      uppy.on("upload-progress", (file, progress) => {
+        console.log(
+          `Upload progress: ${progress.bytesUploaded}/${progress.bytesTotal}`
+        );
+      });
+
+      // Handle successful uploads
+      uppy.on("transloadit:complete", (assembly) => {
+        const uploadEndTime = performance.now();
+        const uploadDuration = (
+          (uploadEndTime - uploadStartTime) /
+          1000
+        ).toFixed(2);
+        const uploadSpeed = (fileSize / 1024 / 1024 / uploadDuration).toFixed(
+          2
+        );
+
+        console.log("Upload complete:", assembly);
+
+        const previewDiv = document.getElementById("preview");
+        let previewHTML = '<div class="preview-container">';
+
+        // Get original file URL (first uploaded file)
+        let originalUrl = assembly.uploads && assembly.uploads[0]?.ssl_url;
+        if (originalUrl) {
+          previewHTML += `
+            <div class="preview-item">
+              <p><strong>Original:</strong></p>
+              <img src="${originalUrl}" alt="Original" />
+            </div>
+          `;
+        }
+
+        // Get transformed URL (optimized version)
+        let transformedUrl =
+          assembly.results.optimize && assembly.results.optimize[0]?.ssl_url;
+
+        if (transformedUrl) {
+          // Track transformation time
+          const transformStartTime = performance.now();
+          const testImg = new Image();
+          testImg.onload = function () {
+            const transformDuration = (
+              (performance.now() - transformStartTime) /
+              1000
+            ).toFixed(2);
+
+            // Display performance stats
+            document.getElementById("performance").style.display = "block";
+            document.getElementById("performance").innerHTML = `
+                <h3 style="margin-top: 0;">Performance Metrics</h3>
+                <div class="stat-row">
+                  <span>File Size:</span>
+                  <strong>${(fileSize / 1024 / 1024).toFixed(2)} MB</strong>
+                </div>
+                <div class="stat-row">
+                  <span>Upload Time:</span>
+                  <strong>${uploadDuration}s</strong>
+                </div>
+                <div class="stat-row">
+                  <span>Upload Speed:</span>
+                  <strong>${uploadSpeed} MB/s</strong>
+                </div>
+                <div class="stat-row">
+                   <span>Transformation Time:</span>
+                <strong>${transformDuration}s</strong>
+                </div>
+                <div class="stat-row">
+                  <span>Total Time:</span>
+                <strong>${(
+                  parseFloat(uploadDuration) + parseFloat(transformDuration)
+                ).toFixed(2)}s</strong>
+                </div>
+              `;
+          };
+          testImg.src = transformedUrl;
+
+          previewHTML += `
+            <div class="preview-item">
+              <p><strong>Transformed:</strong></p>
+              <img src="${transformedUrl}" alt="Transformed" />
+            </div>
+          `;
+        }
+
+        previewHTML += "</div>";
+        previewDiv.innerHTML = previewHTML;
+      });
+
+      // Handle errors
+      uppy.on("error", (error) => {
+        console.error("Upload error:", error);
+        alert("Upload failed: " + error.message);
+      });
+    </script>
+  </body>
+</html>
